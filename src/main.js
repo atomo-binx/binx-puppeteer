@@ -1,8 +1,19 @@
 const api = require("./api");
 const puppeteer = require("./puppeteer");
 
+const filename = __filename.slice(__dirname.length + 1) + " -";
+
 module.exports = {
+  async register() {
+    console.log(filename, "Iniciando serviço de atualização de transportadora");
+    this.run();
+
+    setInterval(this.run, 10 * 60000);
+  },
+
   async run() {
+    console.log(filename, "Iniciando rotina de alteração de transportadoras");
+
     try {
       let accessToken = null;
       let pedidosBinx = [];
@@ -28,17 +39,21 @@ module.exports = {
           pedidosBinx = response.data.pedidos;
         });
 
-      console.log("Quantidade de pedidos para alteração:", pedidosBinx.length);
+      console.log(
+        filename,
+        "Quantidade de pedidos para alteração:",
+        pedidosBinx.length
+      );
 
       // Percorre cada um dos pedidos que necessitam de alteração
       for (const pedido of pedidosBinx) {
         try {
           console.log(
+            filename,
             "Iniciando procedimento de alteração para o pedido:",
             pedido.idpedidovenda
           );
 
-          let pedidoBling = null;
           let melhorMetodo = null;
 
           // Adquire o melhor método de frete para este pedido
@@ -55,24 +70,42 @@ module.exports = {
               melhorMetodo = response.data.melhorMetodo;
             });
 
-          await puppeteer.alterarTransportadora(
-            pedido.idpedidovenda.toString(),
-            melhorMetodo.servicoTraduzido
-          );
+          if (
+            Object.prototype.hasOwnProperty.call(
+              melhorMetodo,
+              "servicoTraduzido"
+            )
+          ) {
+            // Realizar a alteração da transportadora
+            await puppeteer.alterarTransportadora(
+              pedido.idpedidovenda.toString(),
+              melhorMetodo.servicoTraduzido
+            );
 
-          // Atualizar o valor de frete da transportadora escolhida no registro do pedido de venda no Binx
-          await api.patch(
-            "/logistica/pedidos/atualizarvalorfrete",
-            {
-              idPedidoVenda: pedido.idpedidovenda,
-              valorFreteTransportadora: melhorMetodo.preco,
-            },
-            {
-              headers: {
-                authorization: `Bearer ${accessToken}`,
+            // Atualizar o valor de frete da transportadora escolhida no registro do pedido de venda no Binx
+            await api.patch(
+              "/logistica/pedidos/atualizarvalorfrete",
+              {
+                idPedidoVenda: pedido.idpedidovenda,
+                valorFreteTransportadora: melhorMetodo.preco,
               },
-            }
-          );
+              {
+                headers: {
+                  authorization: `Bearer ${accessToken}`,
+                },
+              }
+            );
+
+            // Atualizar a situação desse pedido
+            await api.get(
+              `/pedidovenda/sincroniza?pedidos=${pedido.idpedidovenda}`,
+              {
+                headers: {
+                  authorization: `Bearer ${accessToken}`,
+                },
+              }
+            );
+          }
         } catch (error) {
           console.log(
             `Não foi possível realizar a alteração para o pedido  ${pedido.idpedidovenda}:`,
@@ -81,13 +114,7 @@ module.exports = {
         }
       }
     } catch (error) {
-      console.log(error.message);
+      console.log(filename, "Erro capturado:", error.message);
     }
-  },
-
-  delay() {
-    return new Promise((resolve) => {
-      setTimeout(resolve, 1000);
-    });
   },
 };

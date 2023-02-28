@@ -5,4 +5,4 @@ dotenv.config({
   path: ".env",
 });
 
-main.run();
+main.register();
