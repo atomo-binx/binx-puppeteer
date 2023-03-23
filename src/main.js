@@ -19,14 +19,18 @@ module.exports = {
       let pedidosBinx = [];
 
       // Realiza Login
-      await api
-        .post("/auth/login", {
-          email: process.env.EMAIL,
-          password: process.env.PASSWORD,
-        })
-        .then((response) => {
-          accessToken = response.data.response.accessToken;
-        });
+      if (process.env.USE_AUTH === "true") {
+        await api
+          .post("/auth/login", {
+            email: process.env.EMAIL,
+            password: process.env.PASSWORD,
+          })
+          .then((response) => {
+            accessToken = response.data.response.accessToken;
+          });
+
+        console.log(filename, "Login realizado");
+      }
 
       // Adquire lista de pedidos com transportadora Binx
       await api
